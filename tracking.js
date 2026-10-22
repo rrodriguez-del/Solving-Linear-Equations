@@ -1,7 +1,7 @@
 /* Append-only event outbox. Each event carries a complete assessment snapshot.
    Gameplay never waits on the network. Codes are labels, not verified identities. */
 window.ALA = (() => {
-  let current=null, queue=[], busy=false, storageOK=true, lastError=false;
+  let current=null, queue=[], busy=false, storageOK=true, lastError=false, errorMessage='';
   const key='ala-outbox-v1';
   try { queue=JSON.parse(sessionStorage.getItem(key)||'[]'); if(!Array.isArray(queue))queue=[]; } catch(_){storageOK=false;}
   const uuid=()=>crypto.randomUUID();
@@ -9,7 +9,7 @@ window.ALA = (() => {
   function status() {
     const el=document.getElementById('trackingStatus'); if(!el)return;
     el.textContent=!ALACloud.configured?'Practice only: database not configured. Activity stays in this tab.':
-      lastError?'Not saved yet. Keep this tab open and retry saving.':
+      lastError?'Not saved yet. '+(errorMessage?errorMessage+' — ':'')+'Keep this tab open and retry saving.':
       queue.length?'Saving practice activity… '+queue.length+' pending.':'Practice activity saved.';
     if(!storageOK)el.textContent+=' Tab recovery unavailable; copy your summary before closing.';
     const retry=document.getElementById('retryTracking'); if(retry)retry.hidden=!queue.length;
@@ -22,9 +22,9 @@ window.ALA = (() => {
       const auth=await ALACloud.auth('student');
       while(queue.length){
         await ALACloud.request('/rest/v1/rpc/ala_ingest',{event:queue[0]},auth.access_token);
-        queue.shift();lastError=false;persist();
+        queue.shift();lastError=false;errorMessage='';persist();
       }
-    } catch(_){lastError=true;status();} finally {busy=false;}
+    } catch(error){lastError=true;errorMessage=String(error?.message||'Connection failed').slice(0,240);status();} finally {busy=false;}
   }
   function emit(type) {
     if(!current)return;
